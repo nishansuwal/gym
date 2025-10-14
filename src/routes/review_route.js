@@ -1,21 +1,21 @@
 const express = require("express");
-const authenticateAdmin = require("../middlewares/admin_auth");
-const authenticateUser = require("../middlewares/user_auth");
 const {
   createReview,
-  fetchReview,
-  sallonReviewDelete,
+  getAllReviews,
+  getReviewsByProduct,
+  updateReview,
+  deleteReview,
 } = require("../controllers/review_controller");
-const reviewUpload = require("../helper/review_fileHelper");
+
+const authenticateUser = require("../middlewares/user_auth");
+const authorizeAdmin = require("../middlewares/authorizeAdmin");
+
 const router = express.Router();
 
-router.post(
-  "/addreview",
-  authenticateUser,
-  reviewUpload.array("images"),
-  createReview
-);
-router.get("/list/:salonId", fetchReview);
-router.delete("/delete/:sallonReviewId", sallonReviewDelete);
+router.post("/", authenticateUser, createReview);
+router.get("/", getAllReviews);
+router.get("/:productId", getReviewsByProduct);
+router.put("/:id", authenticateUser, updateReview);
+router.delete("/:id", authenticateUser, deleteReview);
 
 module.exports = router;

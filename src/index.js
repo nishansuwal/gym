@@ -28,7 +28,7 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// const reviewRouter = require("./routes/review_route");
+const reviewRouter = require("./routes/review_route");
 const productRouter = require("./routes/product_route");
 const categorieRouter = require("./routes/categorie_route");
 const userAuthRouter = require("./routes/userauth_route");
@@ -43,7 +43,7 @@ const userRouter = require("./routes/user_route");
 app.use("/api/user", userRouter);
 app.use("/api/auth", userAuthRouter);
 app.use("/api/products", productRouter);
-// app.use("/api/review", reviewRouter);
+app.use("/api/review", reviewRouter);
 app.use("/api/categorie", categorieRouter);
 app.use("/api/coupon", couponRouter);
 // app.use("/api/order", orderRouter);

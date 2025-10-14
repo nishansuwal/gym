@@ -1,88 +1,107 @@
 const Review = require("../models/review_schema");
-const slugify = require("slugify");
-const path = require("path");
-const fs = require("fs");
-const { promisify } = require("util");
 
-const unlinkAsync = promisify(fs.unlink);
-
-const createReview = async (req, res) => {
+exports.createReview = async (req, res) => {
   try {
-    const { description, salonId, rating } = req.body;
-    if (!rating || !description || !salonId) {
+    const { productId, comment, rating } = req.body;
+    const userId = req.user?._id || req.body.userId; // support both auth or manual input
+
+    const existingReview = await Review.findOne({ userId, productId });
+    if (existingReview) {
       return res
         .status(400)
-        .json({ error: "Please provide all the required fields" });
+        .json({ message: "You have already reviewed this product." });
     }
-    const filesArray = req.files.map((element) => ({
-      fileName: element.filename,
-      filePath: element.path,
-      fileType: element.mimetype,
-    }));
-    const reviewDetails = new Review({
-      userId: req.user?._id,
-      salonId: salonId,
-      reviewDescription: description,
-      rating: rating,
-      images: filesArray,
-    });
 
-    const isSaved = await reviewDetails.save();
-
-    res.status(200).json({
-      isSaved,
-      message: "Your review has been posted successfully. Thank you!",
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-const fetchReview = async (req, res) => {
-  const { salonId } = req.params;
-  try {
-    const salonProductsReview = await Review.find({ salonId })
-    .populate("userId")
-    res.status(200).json(salonProductsReview);
+    const review = await Review.create({ userId, productId, comment, rating });
+    res.status(201).json({ success: true, data: review });
   } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ message: "An error occurred while fetch review" });
-};
-}
-
-const sallonReviewDelete = async (req, res) => {
-  const { sallonReviewId } = req.params;
-
-  try {
-    const review = await Review.findById(sallonReviewId);
-    if (!review) {
-      return res.status(404).json({ message: "Review not found" });
-    }
-    for (const image of review.images) {
-      const imagePath = path.join(
-        __dirname,
-        "../../uploads/review/",
-        image.fileName
-      );
-      if (fs.existsSync(imagePath)) {
-        await unlinkAsync(imagePath);
-      }
-    }
-    await Review.findByIdAndDelete(sallonReviewId);
-    return res
-      .status(200)
-      .json({ message: "Salon Review deleted successfully" });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-module.exports = {
-  createReview,
-  fetchReview,
-  sallonReviewDelete,
+exports.getAllReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find()
+      .populate("userId", "name email")
+      .populate("productId", "title");
+
+    res
+      .status(200)
+      .json({ success: true, count: reviews.length, data: reviews });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getReviewsByProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    const reviews = await Review.find({ productId })
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
+
+    res
+      .status(200)
+      .json({ success: true, count: reviews.length, data: reviews });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.updateReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comment, rating } = req.body;
+    const userId = req.user?._id;
+    const userRole = req.user?.role;
+
+    const review = await Review.findById(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    if (
+      review.userId.toString() !== userId.toString() &&
+      userRole !== "admin"
+    ) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to update this review." });
+    }
+
+    review.comment = comment || review.comment;
+    review.rating = rating || review.rating;
+
+    await review.save();
+
+    res.status(200).json({ success: true, data: review });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.deleteReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?._id;
+    const userRole = req.user?.role;
+
+    const review = await Review.findById(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    if (
+      review.userId.toString() !== userId.toString() &&
+      userRole !== "admin"
+    ) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to delete this review." });
+    }
+
+    await Review.findByIdAndDelete(id);
+    res
+      .status(200)
+      .json({ success: true, message: "Review deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
