@@ -2,14 +2,14 @@ const mongoose = require("mongoose");
 
 const orderItemSchema = new mongoose.Schema(
   {
-    order: {
+    orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
       required: true,
     },
-    product: {
+    productId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
+      ref: "product",
       required: true,
     },
     price: {

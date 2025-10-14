@@ -32,7 +32,7 @@ const reviewRouter = require("./routes/review_route");
 const productRouter = require("./routes/product_route");
 const categorieRouter = require("./routes/categorie_route");
 const userAuthRouter = require("./routes/userauth_route");
-// const orderRouter = require("./routes/order_route");
+const orderRouter = require("./routes/order_route");
 const addressRouter = require("./routes/address_route");
 // const testimonial = require("./routes/testimonial_route");
 // const contactRouter = require("./routes/contact_route");
@@ -48,7 +48,7 @@ app.use("/api/review", reviewRouter);
 app.use("/api/categorie", categorieRouter);
 app.use("/api/coupon", couponRouter);
 app.use("/api/faq", faqRouter);
-// app.use("/api/order", orderRouter);
+app.use("/api/order", orderRouter);
 app.use("/api/address", addressRouter);     // address of farmers
 // app.use("/api/testimonial", testimonial);
 // app.use("/api/contact", contactRouter);

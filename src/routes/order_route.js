@@ -1,41 +1,29 @@
 const express = require("express");
-const {
-  getOrder,
-  placeOrder,
-  getUserOrder,
-  getOrdersDetails,
-  orderdelete,
-  orderEdit,
-  getUserOrderClient,
-  clientUpdateStatus,
-  getUserOrderByadminId,
-} = require("../controllers/order_controller");
-const authenticateUser = require("../middlewares/user_auth");
-const authenticateAdmin = require("../middlewares/admin_auth");
 const router = express.Router();
 
-router.post("/placeOrders", placeOrder);
-router.get("/getUserOrders/:userId", getUserOrder);
-router.get(
-  "/client/getOrdersDetails/:userId",
-  authenticateUser,
-  getUserOrderClient
-);
-router.get("/getOrdersDetail/:orderId", authenticateAdmin, getOrdersDetails);
-router.get("/getOrders", authenticateAdmin, getOrder);
-router.delete("/orderdelete/:orderId", authenticateAdmin, orderdelete);
-router.get("/statusEdit/:orderId", orderEdit);
+const {
+  createOrder,
+  getAllOrders,
+  updateOrderStatus,
+  getOrderById,
+  softDeleteOrder,
+  restoreOrder,
+  
+} = require("../controllers/order_controller");
 
-router.put(
-  "/clientUpdateStatus/:orderId",
-  clientUpdateStatus
-);
+const authenticateUser = require("../middlewares/user_auth");
+const authorizeAdmin = require("../middlewares/authorizeAdmin");
 
-router.get(
-  "/vendor/getOrders/:adminId",
-  authenticateAdmin,
-  getUserOrderByadminId
-);
 
+router.post("/", authenticateUser, createOrder);
+router.get("/", authenticateUser, getAllOrders);
+router.get("/:id", authenticateUser, getOrderById);
+
+router.put("/:id/status", authenticateUser, authorizeAdmin, updateOrderStatus);
+
+// router.put("/:id/cancel", authenticateUser, cancelOrder);
+
+router.delete("/:id", authenticateUser, softDeleteOrder);
+router.get("/restore-order/:id", authenticateUser, authorizeAdmin, restoreOrder);
 
 module.exports = router;

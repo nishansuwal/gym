@@ -1,257 +1,296 @@
 const Order = require("../models/order_schema");
-const nodemailer = require("nodemailer");
-const crypto = require("crypto");
-// const Admin = require("../../models/admin_schema");
+const OrderItem = require("../models/order_item");
+const mongoose = require("mongoose");
+const { validateAndApplyCoupon } = require("../utils/couponValidator");
 
-const getUserOrder = async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const orders = await Order.find(
-      { userId: userId, trashbin: false },
-      { trashbin: 0 }
-    )
-      .populate({
-        path: "items.productId",
-        model: "product",
-      })
-      .populate({
-        path: "items.adminId",
-        model: "admin",
-      })
-      .populate("userId")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({ orders });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred while fetching orders" });
-  }
+// ✅ Utility: Generate unique order number
+const generateOrderNumber = () => {
+  const timestamp = Date.now().toString().slice(-6);
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `${timestamp}-${random}`;
 };
 
-const getUserOrderClient = async (req, res) => {
-  const { userId } = req.params;
+// ✅ Create Order (with order items)
+const createOrder = async (req, res) => {
   try {
-    const orders = await Order.find(
-      { userId: userId, trashbin: false },
-      { trashbin: 0 }
-    )
-      .populate({
-        path: "items.productId",
-        model: "product",
-      })
-      .populate({
-        path: "items.adminId",
-        model: "admin",
-      })
-      .populate("userId")
-      .sort({ createdAt: -1 });
+    const { addressId, paymentMethod, items, notes, couponCode } = req.body;
 
-    res.status(200).json({ orders });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred while fetching orders" });
-  }
-};
-
-const getOrder = async (req, res) => {
-  try {
-    const orders = await Order.find()
-      .populate({
-        path: "items.productId",
-        model: "product",
-      })
-      .populate({
-        path: "items.adminId",
-        model: "admin",
-      })
-      .populate("userId")
-      .sort({ createdAt: -1 });
-    res.status(200).json(orders);
-  } catch (error) {
-    console.error("Error getting orders:", error);
-    res.status(500).json({ error: "Failed to get orders" });
-  }
-};
-
-const getOrdersDetails = async (req, res) => {
-  const adminId = req.admin._id; 
-  const { orderId } = req.params;
-  try {
-    const orders = await Order.findOne({
-      _id: orderId,
-      "items.adminId": adminId,
-    })
-      .populate({
-        path: "items.productId",
-        model: "product",
-        populate: {
-          path: "categorieId",
-          model: "categorie",
-        },
-      })
-      .sort({ createdAt: -1 });
-      const filteredItems = orders.items.filter((item) =>
-        item.adminId.equals(adminId)
-      );
-    res.status(200).json({ filteredItems });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred while fetching orders" });
-  }
-};
-
-const placeOrder = async (req, res) => {
-  try {
-    const generateUniqueCode = (length) =>
-      crypto
-        .randomBytes(Math.ceil(length / 2))
-        .toString("hex")
-        .slice(0, length);
-    const generateInvoiceId = () => generateUniqueCode(8);
-
-    const cartData = req.body.cartItems;
-    const userId = req.body.userId;
-    const invoiceId = generateInvoiceId();
-    const orderStatus = "pending";
-    const fulladdress = req.body.fulladdress;
-    const phone = req.body.phone;
-
-    // Calculate total and create items array
-    let total = 0;
-    const items = cartData.map((data) => {
-      total += data.quantity * data.price;
-      return {
-        productId: data.productId,
-        quantity: data.quantity,
-        adminId: data.adminId,
-      };
-    });
-
-    // Create new Order instance
-    const newOrder = new Order({
-      userId,
-      items,
-      fulladdress,
-      phone,
-      orderStatus,
-      invoiceId,
-      orderTotal: total.toString(),
-    });
-    await newOrder.save();
-    res
-      .status(200)
-      .json({ message: "Your order has been placed successfully" });
-  } catch (error) {
-    console.error("Error placing the order:", error);
-    res.status(500).json({ error: "Failed to place the order" });
-  }
-};
-
-const orderEdit = async (req, res) => {
-  const { orderId } = req.params;
-  try {
-    const order = await Order.findOne({ _id: orderId });
-
-    if (!order) {
-      throw new Error("No such order found");
-    } else {
-      const status = order.orderStatus;
-
-      if (status === "pending") {
-        order.orderStatus = "completed";
-      } else if (status === "completed") {
-        order.orderStatus = "cancelled";
-      } else if (status === "cancelled") {
-        order.orderStatus = "pending";
-      }
-
-      await order.save();
-      return res.status(201).send({ message: "Status Updated successfully" });
-    }
-  } catch (error) {
-    return res
-      .status(500)
-      .send({ message: "Could not update", error: error.message });
-  }
-};
-
-const orderdelete = async (req, res) => {
-  const { orderId } = req.params;
-  try {
-    const order = await Order.findByIdAndDelete(orderId);
-    if (!order) {
-      throw new Error("No such order found");
-    } else {
-      return res.status(200).send({ message: "Deleted Successfully" });
-    }
-  } catch (error) {
-    return res
-      .status(500)
-      .send({ message: "Could not delete", error: error.message });
-  }
-};
-
-const clientUpdateStatus = async (req, res) => {
-  const { orderId } = req.params;
-  const { orderItemId, status } = req.body;
-  try {
-    const order = await Order.findOne({ _id: orderId });
-
-    if (!order) {
-      throw new Error("No such order found");
-    } else {
-      const itemIndex = order.items.findIndex(
-        (item) => item._id.toString() === orderItemId
-      );
-      if (itemIndex === -1) {
-        return res.status(500).send({ error: "No such Item found" });
-      }
-      order.items[itemIndex].orderItemStatus = status;
-      await order.save();
-      return res.status(200).send({
-        message: "Status updated successfully",
-        updatedOrder: order,
+    // Validate required fields
+    if (!addressId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Address ID and at least one item are required",
       });
     }
+
+    // Calculate total amount
+    const totalAmount = items.reduce(
+      (acc, item) => acc + item.price * item.quantity,
+      0
+    );
+    let discountAmount = 0;
+    let finalAmount = totalAmount;
+
+    if (couponCode) {
+      try {
+        const couponData = await validateAndApplyCoupon(
+          couponCode,
+          totalAmount
+        );
+        discountAmount = couponData.discountAmount;
+        finalAmount = couponData.finalAmount;
+      } catch (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+    }
+
+    // Create order
+    const order = await Order.create({
+      user: req.user._id,
+      addressId,
+      orderNumber: generateOrderNumber(),
+      totalAmount,
+      discountAmount,
+      finalAmount,
+      couponCode: couponCode || null,
+      paymentMethod: paymentMethod || "COD",
+      notes,
+    });
+
+    // Create order items
+    const orderItems = items.map((item) => ({
+      orderId: order._id,
+      productId: item.productId,
+      price: item.price,
+      quantity: item.quantity,
+      subtotal: item.price * item.quantity,
+    }));
+
+    await OrderItem.insertMany(orderItems);
+
+    res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      order,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .send({ message: "Could not update", error: error.message });
+    console.error("Error creating order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
-const getUserOrderByadminId = async (req, res) => {
-  const { adminId } = req.params;
+// ✅ Get all orders (Admin sees all, user sees own)
+const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find(
-      { "items.adminId": adminId, trashbin: false },
-      { trashbin: 0 }
-    )
-      .populate({
-        path: "items.productId",
-        model: "product",
+    const query =
+      req.user.role === "admin"
+        ? { isDeleted: false }
+        : { user: req.user._id, isDeleted: false };
+
+    // Fetch orders (admin => all, user => only their orders)
+    const orders = await Order.find(query)
+      .populate("user", "name email")
+      .populate("addressId")
+      .sort({ created_at: -1 });
+    // For each order, fetch related items
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order) => {
+        const items = await OrderItem.find({ orderId: order._id }).populate(
+          "productId","name sellingPrice sku image"
+        );
+        return {
+          ...order.toObject(),
+          orderItems: items,
+        };
       })
-      .populate({
-        path: "items.adminId",
-        model: "admin",
-      })
-      .populate("userId")
-      .sort({ createdAt: -1 });
-    res.status(200).json({ orders });
+    );
+    // ✅ Send order with its orderItems
+    res.status(200).json({
+      success: true,
+      count: ordersWithItems.length,
+      data: ordersWithItems,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "An error occurred while fetching orders" });
+    console.error("Error fetching orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Get single order (with its items)
+const getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(id)
+      .populate("user", "name email")
+      .populate("addressId");
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // Restrict access to owner or admin
+    if (
+      req.user.role !== "admin" &&
+      order.user.toString() !== req.user._id.toString()
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Unauthorized access" });
+    }
+
+    const items = await OrderItem.find({ orderId: id }).populate("productId","name sellingPrice sku image");
+
+    res.status(200).json({
+      success: true,
+      data: { ...order.toObject(), items },
+    });
+  } catch (error) {
+    console.error("Error fetching order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Update order status (Admin only)
+const updateOrderStatus = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admin can update order status",
+      });
+    }
+
+    const { id } = req.params;
+    const { orderStatus, paymentStatus } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (orderStatus) order.orderStatus = orderStatus;
+    if (paymentStatus) order.paymentStatus = paymentStatus;
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order updated successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Error updating order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update order",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Soft Delete (user can delete their order, admin can delete any)
+const softDeleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // Only admin or order owner can delete
+    if (
+      req.user.role !== "admin" &&
+      order.user.toString() !== req.user._id.toString()
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Unauthorized delete" });
+    }
+
+    order.isDeleted = true;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order moved to trash",
+    });
+  } catch (error) {
+    console.error("Error deleting order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete order",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Restore deleted order (Admin only)
+const restoreOrder = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admin can restore orders",
+      });
+    }
+
+    const { id } = req.params;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    order.isDeleted = false;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order restored successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Error restoring order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to restore order",
+      error: error.message,
+    });
   }
 };
 
 module.exports = {
-  getOrder,
-  placeOrder,
-  getUserOrder,
-  getOrdersDetails,
-  orderdelete,
-  orderEdit,
-  getUserOrderClient,
-  clientUpdateStatus,
-  getUserOrderByadminId,
+  createOrder,
+  getAllOrders,
+  getOrderById,
+  updateOrderStatus,
+  softDeleteOrder,
+  restoreOrder,
 };

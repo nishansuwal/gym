@@ -4,22 +4,37 @@ const orderSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // references the user placing the order
+      ref: "user",
       required: true,
     },
-    address: {
+    addressId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Address", // references shipping/billing address
+      ref: "address",
       required: true,
     },
     orderNumber: {
       type: String,
       required: true,
       unique: true,
+      index: true,
     },
     totalAmount: {
       type: Number,
       required: true,
+      min: 0,
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
+    finalAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    couponCode: {
+      type: String,
+      default: null,
     },
     paymentMethod: {
       type: String,
@@ -35,6 +50,14 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
       default: "Pending",
+    },
+    notes: {
+      type: String,
+      trim: true,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
