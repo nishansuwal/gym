@@ -1,116 +1,197 @@
 const Faq = require("../models/faq_schema");
-const slugify = require("slugify");
-const path = require("path");
-const fs = require("fs");
 
-const createFaq = async (req, res) => {
+// ✅ Create a new FAQ
+exports.createFaq = async (req, res) => {
   try {
-    const { vendorId, salonId, question, answer } = req.body;
-    const faq = new Faq({
-      vendorId,
-      salonId,
-      question,
-      answer,
-    });
-    await faq.save();
-    res.status(200).json({ message: "Faq has been created successfully" });
-  } catch (error) {
-    console.error("Error creating Faq:", error);
-    res.status(400).json({ error: "Failed to create Faq" });
-  }
-};
+    const { productId, question, answer } = req.body;
 
-const getAllVendorFaq = async (req, res) => {
-  try {
-    const { salonId } = req.params;
-    const faq = await Faq.find({ salonId });
-    res.status(200).json(faq);
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-// const editTestimonial = async (req, res) => {
-//   const { testimonialId } = req.params;
-//   try {
-//     const testimonial = await Testimonial.findOne({ _id: testimonialId });
-//     res.status(200).json(testimonial);
-//   } catch (error) {
-//     console.error(error);
-//   }
-// };
-
-const updateFaq = async (req, res) => {
-  const { faqId } = req.params;
-
-  try {
-    const updateFields = {
-      question: req.body.question,
-      answer: req.body.answer,
-    };
-
-    const updatedFaq = await Faq.findByIdAndUpdate(
-      { _id: faqId },
-      { $set: updateFields }
-    );
-
-    if (updatedFaq) {
-      return res.status(200).json({ message: "Faq updated successfully" });
-    } else {
-      return res.status(404).json({ message: "Faq not found" });
+    if (!productId || !question) {
+      return res.status(400).json({
+        success: false,
+        message: "Product ID and question are required",
+      });
     }
-  } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ message: "An error occurred while updating the Testimonial" });
-  }
-};
 
-const faqdelete = async (req, res) => {
-  const { faqId } = req.params;
-  try {
-    const faq = await Faq.findById(faqId);
-    if (!faq) {
-      return res.status(404).json({ success: false, error: "Faq not found" });
-    }
-    await Faq.findByIdAndDelete(faqId);
-    return res.status(200).json({
+    const faq = await Faq.create({ productId, question, answer });
+
+    res.status(201).json({
       success: true,
-      message: "Faq deleted successfully",
+      message: "FAQ created successfully",
+      data: faq,
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, error: error.message });
+    console.error("Error creating FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
-// const getAllClientTestimonial = async (req, res) => {
-//   const { salonId } = req.params;
-//   try {
-//     const allTestimonial = await Testimonial.find({ salonId: salonId });
-//     res.status(200).json(allTestimonial);
-//   } catch (error) {
-//     console.error(error);
-//      return res.status(500).json({error:'Internal error',error})
-//   }
-// };
+// ✅ Get all FAQs (optionally by product)
+exports.getAllFaqs = async (req, res) => {
+  try {
+    const { productId, includeTrash = false } = req.query;
+    const query = {};
 
-// const getAllAdminTest = async (req, res) => {
-//   try {
-//     const allTestimonial = await Testimonial.find();
-//     return res.status(200).json(allTestimonial);
-//   } catch (error) {
-//     console.error(error);
-//   }
-// };
+    if (productId) query.productId = productId;
+    if (!includeTrash) query.trashbin = false;
 
-module.exports = {
-  createFaq,
-  getAllVendorFaq,
-  //   editTestimonial,
-  updateFaq,
-  faqdelete,
-  //   getAllClientTestimonial,
-  //   getAllAdminTest,
+    const faqs = await Faq.find(query)
+      .sort({ createdAt: -1 })
+      .populate("productId");
+
+    res.status(200).json({
+      success: true,
+      count: faqs.length,
+      data: faqs,
+    });
+  } catch (error) {
+    console.error("Error fetching FAQs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch FAQs",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Get single FAQ by ID
+exports.getFaqById = async (req, res) => {
+  try {
+    const faq = await Faq.findById(req.params.id).populate("productId");
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: faq,
+    });
+  } catch (error) {
+    console.error("Error fetching FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch FAQ",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Update FAQ (question/answer)
+exports.updateFaq = async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+
+    const faq = await Faq.findById(req.params.id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    if (question !== undefined) faq.question = question;
+    if (answer !== undefined) faq.answer = answer;
+
+    await faq.save();
+
+    res.status(200).json({
+      success: true,
+      message: "FAQ updated successfully",
+      data: faq,
+    });
+  } catch (error) {
+    console.error("Error updating FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update FAQ",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Soft delete FAQ (move to trash)
+exports.softDeleteFaq = async (req, res) => {
+  try {
+    const faq = await Faq.findById(req.params.id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    faq.trashbin = true;
+    await faq.save();
+
+    res.status(200).json({
+      success: true,
+      message: "FAQ moved to trash",
+    });
+  } catch (error) {
+    console.error("Error soft-deleting FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to move FAQ to trash",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Restore FAQ from trash
+exports.restoreFaq = async (req, res) => {
+  try {
+    const faq = await Faq.findById(req.params.id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    faq.trashbin = false;
+    await faq.save();
+
+    res.status(200).json({
+      success: true,
+      message: "FAQ restored successfully",
+    });
+  } catch (error) {
+    console.error("Error restoring FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to restore FAQ",
+      error: error.message,
+    });
+  }
+};
+
+// ✅ Permanently delete FAQ
+exports.deleteFaq = async (req, res) => {
+  try {
+    const faq = await Faq.findByIdAndDelete(req.params.id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "FAQ permanently deleted",
+    });
+  } catch (error) {
+    console.error("Error deleting FAQ:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete FAQ",
+      error: error.message,
+    });
+  }
 };

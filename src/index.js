@@ -37,6 +37,7 @@ const addressRouter = require("./routes/address_route");
 // const testimonial = require("./routes/testimonial_route");
 // const contactRouter = require("./routes/contact_route");
 const couponRouter = require("./routes/coupon_route");
+const faqRouter = require("./routes/faq_route");
 
 const userRouter = require("./routes/user_route");
 
@@ -46,6 +47,7 @@ app.use("/api/products", productRouter);
 app.use("/api/review", reviewRouter);
 app.use("/api/categorie", categorieRouter);
 app.use("/api/coupon", couponRouter);
+app.use("/api/faq", faqRouter);
 // app.use("/api/order", orderRouter);
 app.use("/api/address", addressRouter);     // address of farmers
 // app.use("/api/testimonial", testimonial);

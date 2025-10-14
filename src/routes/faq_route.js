@@ -1,16 +1,30 @@
 const express = require("express");
-const {
-  createFaq,
-  getAllVendorFaq,
-  updateFaq,
-  faqdelete,
-} = require("../controllers/faq_controller");
-const authenticateAdmin = require("../middlewares/admin_auth");
 const router = express.Router();
+const faqController = require("../controllers/faq_controller");
+const authenticateUser = require("../middlewares/user_auth");
+const authorizeAdmin = require("../middlewares/authorizeAdmin");
 
-router.post("/create", authenticateAdmin, createFaq);
-router.get("/list/:salonId", getAllVendorFaq);
-router.post("/update/:faqId", authenticateAdmin, updateFaq);
-router.delete("/delete/:faqId", authenticateAdmin, faqdelete);
+router.post("/", authenticateUser, authorizeAdmin, faqController.createFaq);
+router.get("/", faqController.getAllFaqs);
+router.get("/:id", faqController.getFaqById);
+router.put("/:id", authenticateUser, authorizeAdmin, faqController.updateFaq);
+router.patch(
+  "/:id/trash",
+  authenticateUser,
+  authorizeAdmin,
+  faqController.softDeleteFaq
+);
+router.patch(
+  "/:id/restore",
+  authenticateUser,
+  authorizeAdmin,
+  faqController.restoreFaq
+);
+router.delete(
+  "/:id",
+  authenticateUser,
+  authorizeAdmin,
+  faqController.deleteFaq
+);
 
 module.exports = router;

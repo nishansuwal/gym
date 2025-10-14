@@ -4,14 +4,18 @@ const faqSchema = new mongoose.Schema(
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "product",
+      required: true,
+      index: true,
     },
     question: {
       type: String,
-      required: false,
+      required: [true, "Question is required"],
+      trim: true,
     },
     answer: {
       type: String,
-      required: false,
+      trim: true,
+      default: "",
     },
     trashbin: {
       type: Boolean,
